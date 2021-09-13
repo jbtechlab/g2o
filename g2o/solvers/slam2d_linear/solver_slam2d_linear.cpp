@@ -35,6 +35,7 @@
 #include "g2o/types/slam2d/edge_se2.h"
 
 #include "g2o/stuff/misc.h"
+#include "g2o/stuff/scoped_pointer.h"
 
 #include "g2o/solvers/eigen/linear_solver_eigen.h"
 
@@ -50,7 +51,7 @@ namespace g2o {
   class ThetaTreeAction : public HyperDijkstra::TreeAction
   {
     public:
-      explicit ThetaTreeAction(VectorX& theta) : HyperDijkstra::TreeAction(), _thetaGuess(theta) {}
+      explicit ThetaTreeAction(number_t* theta) : HyperDijkstra::TreeAction(), _thetaGuess(theta) {}
       virtual number_t perform(HyperGraph::Vertex* v, HyperGraph::Vertex* vParent, HyperGraph::Edge* e)
       {
         if (! vParent)
@@ -68,7 +69,7 @@ namespace g2o {
         return 1.;
       }
     protected:
-      VectorX& _thetaGuess;
+      number_t* _thetaGuess;
   };
 
   SolverSLAM2DLinear::SolverSLAM2DLinear(std::unique_ptr<Solver> solver)
@@ -99,11 +100,11 @@ namespace g2o {
 
     typedef Eigen::Matrix<number_t, 1, 1, Eigen::ColMajor> ScalarMatrix;
 
-    std::vector<int> blockIndeces(_optimizer->indexMapping().size());
+    ScopedArray<int> blockIndeces(new int[_optimizer->indexMapping().size()]);
     for (size_t i = 0; i < _optimizer->indexMapping().size(); ++i)
       blockIndeces[i] = i+1;
 
-    SparseBlockMatrix<ScalarMatrix> H(blockIndeces.data(), blockIndeces.data(), _optimizer->indexMapping().size(), _optimizer->indexMapping().size());
+    SparseBlockMatrix<ScalarMatrix> H(blockIndeces.get(), blockIndeces.get(), _optimizer->indexMapping().size(), _optimizer->indexMapping().size());
 
     // building the structure, diagonal for each active vertex
     for (size_t i = 0; i < _optimizer->indexMapping().size(); ++i) {
@@ -153,7 +154,7 @@ namespace g2o {
     hyperDijkstra.shortestPaths(root, &uniformCost);
 
     HyperDijkstra::computeTree(hyperDijkstra.adjacencyMap());
-    ThetaTreeAction thetaTreeAction(thetaGuess);
+    ThetaTreeAction thetaTreeAction(thetaGuess.data());
     HyperDijkstra::visitAdjacencyMap(hyperDijkstra.adjacencyMap(), &thetaTreeAction);
 
     // construct for the orientation
